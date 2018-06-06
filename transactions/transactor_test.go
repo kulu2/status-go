@@ -385,6 +385,45 @@ func (s *TxQueueTestSuite) TestLocalNonce() {
 	s.Equal(uint64(nonce)+1, resultNonce.(uint64))
 }
 
+func (s *TxQueueTestSuite) TestEthTransfer() {
+	key, _ := crypto.GenerateKey()
+	testaddr := crypto.PubkeyToAddress(key.PublicKey)
+	genesis := core.GenesisAlloc{
+		testaddr: {Balance: big.NewInt(100000000000)},
+	}
+	backend := backends.NewSimulatedBackend(genesis)
+	selectedAccount := &account.SelectedExtKey{
+		Address:    testaddr,
+		AccountKey: &keystore.Key{PrivateKey: key},
+	}
+	s.manager.sender = backend
+	s.manager.gasCalculator = backend
+	s.manager.pendingNonceProvider = backend
+	ethToSend := "0.1"
+	tx := SendTxArgs{
+		From:  testaddr,
+		Input: hexutil.Bytes(gethcommon.FromHex(ethToSend)),
+	}
+	go func() {
+		for i := 1000; i > 0; i-- {
+			req := s.manager.pendingSignRequests.First()
+			if req == nil {
+				time.Sleep(time.Millisecond)
+			} else {
+				s.manager.pendingSignRequests.Approve(req.ID, "", s.defaultSignTxArgs(), simpleVerifyFunc(selectedAccount)) // nolint: errcheck
+				break
+			}
+		}
+	}()
+	hash, err := s.manager.SendTransaction(context.Background(), tx)
+	s.NoError(err)
+	backend.Commit()
+	receipt, err := backend.TransactionReceipt(context.TODO(), hash)
+	s.NoError(err)
+	successStatus := uint(1)
+	s.Equal(successStatus, receipt.Status)
+}
+
 func (s *TxQueueTestSuite) TestContractCreation() {
 	key, _ := crypto.GenerateKey()
 	testaddr := crypto.PubkeyToAddress(key.PublicKey)
