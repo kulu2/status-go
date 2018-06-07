@@ -390,12 +390,15 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 
 	testCases := []struct {
 		name             string
-		txInput          []byte
+		tx               SendTxArgs
 		receiptValidator func(receipt *types.Receipt, testaddr common.Address)
 	}{
 		{
 			"EthTransfer",
-			hexutil.Bytes(gethcommon.FromHex("0.1")),
+			SendTxArgs{
+				Input: hexutil.Bytes(gethcommon.FromHex("")),
+				Value: (*hexutil.Big)(big.NewInt(10)),
+			},
 			func(receipt *types.Receipt, testaddr common.Address) {
 				successStatus := uint(1)
 				s.Equal(successStatus, receipt.Status)
@@ -403,7 +406,9 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		},
 		{
 			"ContractCreation",
-			hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
+			SendTxArgs{
+				Input: hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
+			},
 			func(receipt *types.Receipt, testaddr common.Address) {
 				s.Equal(crypto.CreateAddress(testaddr, 0), receipt.ContractAddress)
 			},
@@ -417,10 +422,8 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		s.T().Run(testCase.name, func(t *testing.T) {
 			key, _ := crypto.GenerateKey()
 			testaddr := crypto.PubkeyToAddress(key.PublicKey)
-			tx := SendTxArgs{
-				From:  testaddr,
-				Input: testCase.txInput,
-			}
+			tx := testCase.tx
+			tx.From = testaddr
 			genesis := core.GenesisAlloc{
 				testaddr: {Balance: big.NewInt(100000000000)},
 			}
@@ -451,7 +454,6 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 			receipt, err := backend.TransactionReceipt(context.TODO(), hash)
 			s.NoError(err)
 			testCase.receiptValidator(receipt, testaddr)
-			time.Sleep(time.Millisecond * 5000)
 		})
 	}
 }
