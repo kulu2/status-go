@@ -396,7 +396,6 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		{
 			"EthTransfer",
 			SendTxArgs{
-				Input: hexutil.Bytes(gethcommon.FromHex("")),
 				Value: (*hexutil.Big)(big.NewInt(10)),
 			},
 			func(receipt *types.Receipt, testaddr common.Address) {
