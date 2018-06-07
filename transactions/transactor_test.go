@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
@@ -385,80 +386,72 @@ func (s *TxQueueTestSuite) TestLocalNonce() {
 	s.Equal(uint64(nonce)+1, resultNonce.(uint64))
 }
 
-func (s *TxQueueTestSuite) TestEthTransfer() {
-	key, _ := crypto.GenerateKey()
-	testaddr := crypto.PubkeyToAddress(key.PublicKey)
-	genesis := core.GenesisAlloc{
-		testaddr: {Balance: big.NewInt(100000000000)},
+func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
+
+	testCases := []struct {
+		name             string
+		txInput          []byte
+		receiptValidator func(receipt *types.Receipt, testaddr common.Address)
+	}{
+		{
+			"EthTransfer",
+			hexutil.Bytes(gethcommon.FromHex("0.1")),
+			func(receipt *types.Receipt, testaddr common.Address) {
+				successStatus := uint(1)
+				s.Equal(successStatus, receipt.Status)
+			},
+		},
+		{
+			"ContractCreation",
+			hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
+			func(receipt *types.Receipt, testaddr common.Address) {
+				s.Equal(crypto.CreateAddress(testaddr, 0), receipt.ContractAddress)
+			},
+		},
+		// {
+		// 	"ContractStateTransfer",
+		// },
 	}
-	backend := backends.NewSimulatedBackend(genesis)
-	selectedAccount := &account.SelectedExtKey{
-		Address:    testaddr,
-		AccountKey: &keystore.Key{PrivateKey: key},
-	}
-	s.manager.sender = backend
-	s.manager.gasCalculator = backend
-	s.manager.pendingNonceProvider = backend
-	ethToSend := "0.1"
-	tx := SendTxArgs{
-		From:  testaddr,
-		Input: hexutil.Bytes(gethcommon.FromHex(ethToSend)),
-	}
-	go func() {
-		for i := 1000; i > 0; i-- {
-			req := s.manager.pendingSignRequests.First()
-			if req == nil {
-				time.Sleep(time.Millisecond)
-			} else {
-				s.manager.pendingSignRequests.Approve(req.ID, "", s.defaultSignTxArgs(), simpleVerifyFunc(selectedAccount)) // nolint: errcheck
-				break
+
+	for _, testCase := range testCases {
+		s.T().Run(testCase.name, func(t *testing.T) {
+			key, _ := crypto.GenerateKey()
+			testaddr := crypto.PubkeyToAddress(key.PublicKey)
+			tx := SendTxArgs{
+				From:  testaddr,
+				Input: testCase.txInput,
 			}
-		}
-	}()
-	hash, err := s.manager.SendTransaction(context.Background(), tx)
-	s.NoError(err)
-	backend.Commit()
-	receipt, err := backend.TransactionReceipt(context.TODO(), hash)
-	s.NoError(err)
-	successStatus := uint(1)
-	s.Equal(successStatus, receipt.Status)
-}
-
-func (s *TxQueueTestSuite) TestContractCreation() {
-	key, _ := crypto.GenerateKey()
-	testaddr := crypto.PubkeyToAddress(key.PublicKey)
-	genesis := core.GenesisAlloc{
-		testaddr: {Balance: big.NewInt(100000000000)},
-	}
-	backend := backends.NewSimulatedBackend(genesis)
-	selectedAccount := &account.SelectedExtKey{
-		Address:    testaddr,
-		AccountKey: &keystore.Key{PrivateKey: key},
-	}
-	s.manager.sender = backend
-	s.manager.gasCalculator = backend
-	s.manager.pendingNonceProvider = backend
-	tx := SendTxArgs{
-		From:  testaddr,
-		Input: hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
-	}
-
-	go func() {
-		for i := 1000; i > 0; i-- {
-			req := s.manager.pendingSignRequests.First()
-			if req == nil {
-				time.Sleep(time.Millisecond)
-			} else {
-				s.manager.pendingSignRequests.Approve(req.ID, "", s.defaultSignTxArgs(), simpleVerifyFunc(selectedAccount)) // nolint: errcheck
-				break
+			genesis := core.GenesisAlloc{
+				testaddr: {Balance: big.NewInt(100000000000)},
 			}
-		}
-	}()
+			backend := backends.NewSimulatedBackend(genesis)
+			selectedAccount := &account.SelectedExtKey{
+				Address:    testaddr,
+				AccountKey: &keystore.Key{PrivateKey: key},
+			}
 
-	hash, err := s.manager.SendTransaction(context.Background(), tx)
-	s.NoError(err)
-	backend.Commit()
-	receipt, err := backend.TransactionReceipt(context.TODO(), hash)
-	s.NoError(err)
-	s.Equal(crypto.CreateAddress(testaddr, 0), receipt.ContractAddress)
+			s.manager.sender = backend
+			s.manager.gasCalculator = backend
+			s.manager.pendingNonceProvider = backend
+			go func() {
+				for i := 1000; i > 0; i-- {
+					req := s.manager.pendingSignRequests.First()
+					if req == nil {
+						time.Sleep(time.Millisecond)
+					} else {
+						s.manager.pendingSignRequests.Approve(req.ID, "", s.defaultSignTxArgs(), simpleVerifyFunc(selectedAccount)) // nolint: errcheck
+						break
+					}
+				}
+			}()
+
+			hash, err := s.manager.SendTransaction(context.Background(), tx)
+			s.NoError(err)
+			backend.Commit()
+			receipt, err := backend.TransactionReceipt(context.TODO(), hash)
+			s.NoError(err)
+			testCase.receiptValidator(receipt, testaddr)
+			time.Sleep(time.Millisecond * 5000)
+		})
+	}
 }
