@@ -425,7 +425,7 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		// 		},
 		// 		{
 		// 			// Change contract owner
-		// 			Input hexutil.Bytes(gethcommon.FromHex(contract.))
+		//
 		// 		},
 		// 	},
 		// 	func(receipt *types.Receipt, testaddr common.Address) {
