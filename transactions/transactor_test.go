@@ -390,13 +390,15 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 
 	testCases := []struct {
 		name             string
-		tx               SendTxArgs
+		transactions     []SendTxArgs
 		receiptValidator func(receipt *types.Receipt, testaddr common.Address)
 	}{
 		{
 			"EthTransfer",
-			SendTxArgs{
-				Value: (*hexutil.Big)(big.NewInt(10)),
+			[]SendTxArgs{
+				{
+					Value: (*hexutil.Big)(big.NewInt(10)),
+				},
 			},
 			func(receipt *types.Receipt, testaddr common.Address) {
 				successStatus := uint(1)
@@ -405,8 +407,10 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		},
 		{
 			"ContractCreation",
-			SendTxArgs{
-				Input: hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
+			[]SendTxArgs{
+				{
+					Input: hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
+				},
 			},
 			func(receipt *types.Receipt, testaddr common.Address) {
 				s.Equal(crypto.CreateAddress(testaddr, 0), receipt.ContractAddress)
@@ -414,6 +418,19 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		},
 		// {
 		// 	"ContractStateTransfer",
+		// 	[]SendTxArgs{
+		// 		{
+		// 			// Create contract
+		// 			Input: hexutil.Bytes(gethcommon.FromHex(contract.ENSBin)),
+		// 		},
+		// 		{
+		// 			// Change contract owner
+		// 			Input hexutil.Bytes(gethcommon.FromHex(contract.))
+		// 		},
+		// 	},
+		// 	func(receipt *types.Receipt, testaddr common.Address) {
+		// 		s.Equal(crypto.CreateAddress(testaddr, 0), receipt.ContractAddress)
+		// 	},
 		// },
 	}
 
@@ -421,8 +438,6 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 		s.T().Run(testCase.name, func(t *testing.T) {
 			key, _ := crypto.GenerateKey()
 			testaddr := crypto.PubkeyToAddress(key.PublicKey)
-			tx := testCase.tx
-			tx.From = testaddr
 			genesis := core.GenesisAlloc{
 				testaddr: {Balance: big.NewInt(100000000000)},
 			}
@@ -447,12 +462,21 @@ func (s *TxQueueTestSuite) TestTransactionsWithSimulatedBackend() {
 				}
 			}()
 
-			hash, err := s.manager.SendTransaction(context.Background(), tx)
-			s.NoError(err)
-			backend.Commit()
-			receipt, err := backend.TransactionReceipt(context.TODO(), hash)
-			s.NoError(err)
-			testCase.receiptValidator(receipt, testaddr)
+			// The receipt from the last transaction in the testcase
+			var finalReceipt *types.Receipt
+			for i, tx := range testCase.transactions {
+				tx.From = testaddr
+				hash, err := s.manager.SendTransaction(context.Background(), tx)
+				s.NoError(err)
+				backend.Commit()
+				receipt, err := backend.TransactionReceipt(context.TODO(), hash)
+				s.NoError(err)
+				// if its the last transaction, keep the receipt
+				if i == len(testCase.transactions)-1 {
+					finalReceipt = receipt
+				}
+			}
+			testCase.receiptValidator(finalReceipt, testaddr)
 		})
 	}
 }
