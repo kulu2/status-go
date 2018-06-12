@@ -373,7 +373,7 @@ func (b *StatusBackend) Logout() error {
 	switch err {
 	case node.ErrServiceUnknown: // Whisper was never registered
 	case nil:
-		if err := whisperService.DeleteKeyPairs(); err != nil {
+		if err = whisperService.DeleteKeyPairs(); err != nil {
 			return fmt.Errorf("%s: %v", ErrWhisperClearIdentitiesFailure, err)
 		}
 	default:
@@ -395,7 +395,7 @@ func (b *StatusBackend) ReSelectAccount() error {
 	switch err {
 	case node.ErrServiceUnknown: // Whisper was never registered
 	case nil:
-		if err := whisperService.SelectKeyPair(selectedAccount.AccountKey.PrivateKey); err != nil {
+		if err = whisperService.SelectKeyPair(selectedAccount.AccountKey.PrivateKey); err != nil {
 			return ErrWhisperIdentityInjectionFailure
 		}
 	default:
@@ -429,7 +429,7 @@ func (b *StatusBackend) SelectAccount(address, password string) error {
 	switch err {
 	case node.ErrServiceUnknown: // Whisper was never registered
 	case nil:
-		if err := whisperService.SelectKeyPair(acc.AccountKey.PrivateKey); err != nil {
+		if err = whisperService.SelectKeyPair(acc.AccountKey.PrivateKey); err != nil {
 			return ErrWhisperIdentityInjectionFailure
 		}
 	default:

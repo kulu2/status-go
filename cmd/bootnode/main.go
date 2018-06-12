@@ -43,7 +43,11 @@ func main() {
 
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(*verbosity))
-	if err := glogger.Vmodule(*vmodule); err != nil {
+	var (
+		nodeKey *ecdsa.PrivateKey
+		err     error
+	)
+	if err = glogger.Vmodule(*vmodule); err != nil {
 		log.Crit("Failed to set glog verbosity", "value", *vmodule, "err", err)
 	}
 	log.Root().SetHandler(glogger)
@@ -51,10 +55,6 @@ func main() {
 	if len(*nodeKeyFile) == 0 && len(*keydata) == 0 {
 		log.Crit("either `nodekey` or `keydata` must be provided")
 	}
-	var (
-		nodeKey *ecdsa.PrivateKey
-		err     error
-	)
 	if len(*nodeKeyFile) != 0 {
 		nodeKey, err = crypto.LoadECDSA(*nodeKeyFile)
 		if err != nil {

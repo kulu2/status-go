@@ -3,6 +3,7 @@ package debug_test
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -14,12 +15,14 @@ import (
 	"github.com/status-im/status-go/api"
 	"github.com/status-im/status-go/cmd/statusd/debug"
 	"github.com/status-im/status-go/params"
-	"github.com/stretchr/testify/assert"
+	testifyAssert "github.com/stretchr/testify/assert"
 )
+
+const stopNodeCommandLine = "StopNode()"
 
 // TestInvalidExpressions tests invalid expressions.
 func TestInvalidExpressions(t *testing.T) {
-	assert := assert.New(t)
+	assert := testifyAssert.New(t)
 
 	startDebugging(assert)
 
@@ -54,7 +57,7 @@ func TestInvalidExpressions(t *testing.T) {
 
 // TestStartStopNode tests starting and stopping a node remotely.
 func TestStartStopNode(t *testing.T) {
-	assert := assert.New(t)
+	assert := testifyAssert.New(t)
 	configJSON, cleanup, err := mkConfigJSON("start-stop-node")
 	assert.NoError(err)
 	defer cleanup()
@@ -68,7 +71,7 @@ func TestStartStopNode(t *testing.T) {
 	assert.Len(replies, 1)
 	assert.Equal("[0] <nil>", replies[0])
 
-	commandLine = "StopNode()"
+	commandLine = stopNodeCommandLine
 	replies = sendCommandLine(assert, conn, commandLine)
 	assert.Len(replies, 1)
 	assert.Equal("[0] <nil>", replies[0])
@@ -76,7 +79,7 @@ func TestStartStopNode(t *testing.T) {
 
 // TestCreateAccount tests creating an account on the server.
 func TestCreateAccount(t *testing.T) {
-	assert := assert.New(t)
+	assert := testifyAssert.New(t)
 	configJSON, cleanup, err := mkConfigJSON("create-account")
 	assert.NoError(err)
 	defer cleanup()
@@ -98,7 +101,7 @@ func TestCreateAccount(t *testing.T) {
 	assert.NotEqual("[2] <nil>", replies[2])
 	assert.Equal("[3] <nil>", replies[3])
 
-	commandLine = "StopNode()"
+	commandLine = stopNodeCommandLine
 	replies = sendCommandLine(assert, conn, commandLine)
 	assert.Len(replies, 1)
 	assert.Equal("[0] <nil>", replies[0])
@@ -107,7 +110,7 @@ func TestCreateAccount(t *testing.T) {
 // TestSelectAccountLogout tests selecting an account on the server
 // and logging out afterwards.
 func TestSelectAccountLogout(t *testing.T) {
-	assert := assert.New(t)
+	assert := testifyAssert.New(t)
 	configJSON, cleanup, err := mkConfigJSON("select-account")
 	assert.NoError(err)
 	defer cleanup()
@@ -141,7 +144,7 @@ func TestSelectAccountLogout(t *testing.T) {
 	assert.Len(replies, 1)
 	assert.Equal("[0] <nil>", replies[0])
 
-	commandLine = "StopNode()"
+	commandLine = stopNodeCommandLine
 	replies = sendCommandLine(assert, conn, commandLine)
 	assert.Len(replies, 1)
 	assert.Equal("[0] <nil>", replies[0])
@@ -157,7 +160,7 @@ var (
 )
 
 // startDebugging lazily creates or reuses a debug instance.
-func startDebugging(assert *assert.Assertions) {
+func startDebugging(assert *testifyAssert.Assertions) {
 	mu.Lock()
 	defer mu.Unlock()
 	if d == nil {
@@ -188,14 +191,14 @@ func mkConfigJSON(name string) (string, func(), error) {
 }
 
 // connectDebug connects to the debug instance.
-func connectDebug(assert *assert.Assertions) net.Conn {
+func connectDebug(assert *testifyAssert.Assertions) net.Conn {
 	conn, err := net.Dial("tcp", ":51515")
 	assert.NoError(err)
 	return conn
 }
 
 // sendCommandLine sends a command line via the passed connection.
-func sendCommandLine(assert *assert.Assertions, conn net.Conn, commandLine string) []string {
+func sendCommandLine(assert *testifyAssert.Assertions, conn io.ReadWriter, commandLine string) []string {
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 	_, err := writer.WriteString(commandLine + "\n")
